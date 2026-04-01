@@ -121,8 +121,14 @@ impl Encoder {
     /// This method returns an error under the same circumstances that
     /// `compress` does.
     pub fn compress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        let mut buf =
-            Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
+        // FIXME: When supporting Rust >= 1.82.0, replace with:
+        // let mut buf =
+        //     Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
+        let mut buf = Vec::with_capacity(max_compress_len(input.len()));
+        // SAFETY: Vec::with_capacity above guarantees that the buffer is allocated up to the
+        // capacity.
+        unsafe { buf.set_len(max_compress_len(input.len())) }
+
         let n = self.compress_uninit(input, &mut buf)?;
         buf.truncate(n);
         // SAFETY: The buffer is initialized up to the length returned by decompress_uninit.

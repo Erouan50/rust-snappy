@@ -97,8 +97,14 @@ impl Decoder {
     /// This method returns an error under the same circumstances that
     /// `decompress` does.
     pub fn decompress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        let mut buf: Vec<MaybeUninit<u8>> =
-            Box::new_uninit_slice(decompress_len(input)?).into_vec();
+        // FIXME: When supporting Rust >= 1.82.0, replace with:
+        // let mut buf =
+        //     Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
+        let mut buf = Vec::with_capacity(decompress_len(input)?);
+        // SAFETY: Vec::with_capacity above guarantees that the buffer is allocated up to the
+        // capacity.
+        unsafe { buf.set_len(decompress_len(input)?) }
+
         let n = self.decompress_uninit(input, &mut buf)?;
         buf.truncate(n);
         // SAFETY: The buffer is initialized up to the length returned by decompress_uninit.
