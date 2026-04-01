@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
-use std::{mem, ptr};
 use std::{fmt, slice};
+use std::{mem, ptr};
 
 use crate::bytes;
 use crate::error::{Error, Result};
@@ -121,12 +121,14 @@ impl Encoder {
     /// This method returns an error under the same circumstances that
     /// `compress` does.
     pub fn compress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        let mut buf = Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
+        let mut buf =
+            Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
         let n = self.compress_uninit(input, &mut buf)?;
         buf.truncate(n);
         // SAFETY: The buffer is initialized up to the length returned by decompress_uninit.
         // decompress_uninit guarantees that the buffer is initialized up to the returned length.
-        let buf = unsafe { mem::transmute::<Vec<MaybeUninit<u8>>, Vec<u8>>(buf) };
+        let buf =
+            unsafe { mem::transmute::<Vec<MaybeUninit<u8>>, Vec<u8>>(buf) };
         Ok(buf)
     }
 
@@ -205,7 +207,6 @@ impl Encoder {
             d = block.d;
         }
         Ok(d)
-
     }
 }
 
