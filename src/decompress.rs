@@ -1,4 +1,5 @@
-use std::ptr;
+use std::mem::MaybeUninit;
+use std::{mem, ptr, slice};
 
 use crate::bytes;
 use crate::error::{Error, Result};
@@ -77,21 +78,14 @@ impl Decoder {
         input: &[u8],
         output: &mut [u8],
     ) -> Result<usize> {
-        if input.is_empty() {
-            return Err(Error::Empty);
-        }
-        let hdr = Header::read(input)?;
-        if hdr.decompress_len > output.len() {
-            return Err(Error::BufferTooSmall {
-                given: output.len() as u64,
-                min: hdr.decompress_len as u64,
-            });
-        }
-        let dst = &mut output[..hdr.decompress_len];
-        let mut dec =
-            Decompress { src: &input[hdr.len..], s: 0, dst: dst, d: 0 };
-        dec.decompress()?;
-        Ok(dec.dst.len())
+        // SAFETY: `output` is guaranteed to be valid for reads and writes of `output.len()` bytes.
+        let output: &mut [MaybeUninit<u8>] = unsafe {
+            slice::from_raw_parts_mut(
+                output.as_mut_ptr() as *mut MaybeUninit<u8>,
+                output.len(),
+            )
+        };
+        self.decompress_uninit(input, output)
     }
 
     /// Decompresses all bytes in `input` into a freshly allocated `Vec`.
@@ -103,10 +97,59 @@ impl Decoder {
     /// This method returns an error under the same circumstances that
     /// `decompress` does.
     pub fn decompress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        let mut buf = vec![0; decompress_len(input)?];
-        let n = self.decompress(input, &mut buf)?;
+        let mut buf: Vec<MaybeUninit<u8>> =
+            Box::new_uninit_slice(decompress_len(input)?).into_vec();
+        let n = self.decompress_uninit(input, &mut buf)?;
         buf.truncate(n);
+        // SAFETY: The buffer is initialized up to the length returned by decompress_uninit.
+        // decompress_uninit guarantees that the buffer is initialized up to the returned length.
+        let buf =
+            unsafe { mem::transmute::<Vec<MaybeUninit<u8>>, Vec<u8>>(buf) };
         Ok(buf)
+    }
+
+    /// Decompresses all bytes in `input` into `output`.
+    ///
+    /// `input` must be a sequence of bytes returned by a conforming Snappy
+    /// compressor.
+    ///
+    /// The size of `output` must be large enough to hold all decompressed
+    /// bytes from the `input`. The size required can be queried with the
+    /// `decompress_len` function.
+    ///
+    /// On success, this returns the number of bytes written to `output`.
+    ///
+    /// The data written to `output` is guaranteed to be initialized to the
+    /// number of bytes written returned by the method. Data outside that
+    /// bound is not initialized and reading from it is UB. It's the callee's
+    /// responsibility to finalize the state of `output`.
+    ///
+    /// # Errors
+    ///
+    /// This method returns an error in the following circumstances:
+    ///
+    /// * Invalid compressed Snappy data was seen.
+    /// * The total space required for decompression exceeds `2^32 - 1`.
+    /// * `output` has length less than `decompress_len(input)`.
+    pub fn decompress_uninit(
+        &mut self,
+        input: &[u8],
+        output: &mut [MaybeUninit<u8>],
+    ) -> Result<usize> {
+        if input.is_empty() {
+            return Err(Error::Empty);
+        }
+        let hdr = Header::read(input)?;
+        if hdr.decompress_len > output.len() {
+            return Err(Error::BufferTooSmall {
+                given: output.len() as u64,
+                min: hdr.decompress_len as u64,
+            });
+        }
+        let dst = &mut output[..hdr.decompress_len];
+        let mut dec = Decompress { src: &input[hdr.len..], s: 0, dst, d: 0 };
+        dec.decompress()?;
+        Ok(dec.dst.len())
     }
 }
 
@@ -117,7 +160,7 @@ struct Decompress<'s, 'd> {
     /// The current position in the compressed bytes.
     s: usize,
     /// The output buffer to write the decompressed bytes.
-    dst: &'d mut [u8],
+    dst: &'d mut [MaybeUninit<u8>],
     /// The current position in the decompressed buffer.
     d: usize,
 }
@@ -178,7 +221,7 @@ impl<'s, 'd> Decompress<'s, 'd> {
                 let srcp = self.src.as_ptr().add(self.s);
                 let dstp = self.dst.as_mut_ptr().add(self.d);
                 // Hopefully uses SIMD registers for 128 bit load/store.
-                ptr::copy_nonoverlapping(srcp, dstp, 16);
+                ptr::copy_nonoverlapping(srcp, dstp as *mut u8, 16);
             }
             self.d += len as usize;
             self.s += len as usize;
@@ -220,7 +263,7 @@ impl<'s, 'd> Decompress<'s, 'd> {
             // is correct.
             let srcp = self.src.as_ptr().add(self.s);
             let dstp = self.dst.as_mut_ptr().add(self.d);
-            ptr::copy_nonoverlapping(srcp, dstp, len as usize);
+            ptr::copy_nonoverlapping(srcp, dstp as *mut u8, len as usize);
         }
         self.s += len as usize;
         self.d += len as usize;
