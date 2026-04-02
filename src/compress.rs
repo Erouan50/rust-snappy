@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::{fmt, slice};
-use std::{mem, ptr};
+use std::ptr;
 
 use crate::bytes;
 use crate::error::{Error, Result};
@@ -121,20 +121,12 @@ impl Encoder {
     /// This method returns an error under the same circumstances that
     /// `compress` does.
     pub fn compress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        // FIXME: When supporting Rust >= 1.82.0, replace with:
-        // let mut buf =
-        //     Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
         let mut buf = Vec::with_capacity(max_compress_len(input.len()));
-        // SAFETY: Vec::with_capacity above guarantees that the buffer is allocated up to the
-        // capacity.
-        unsafe { buf.set_len(max_compress_len(input.len())) }
-
-        let n = self.compress_uninit(input, &mut buf)?;
-        buf.truncate(n);
-        // SAFETY: The buffer is initialized up to the length returned by decompress_uninit.
-        // decompress_uninit guarantees that the buffer is initialized up to the returned length.
-        let buf =
-            unsafe { mem::transmute::<Vec<MaybeUninit<u8>>, Vec<u8>>(buf) };
+        let n = self.compress_uninit(input, buf.spare_capacity_mut())?;
+        
+        // SAFETY: compress_uninit guarantees all the data up to `n` is 
+        // initialized
+        unsafe { buf.set_len(n) };
         Ok(buf)
     }
 

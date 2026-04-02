@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use std::{mem, ptr, slice};
+use std::{ptr, slice};
 
 use crate::bytes;
 use crate::error::{Error, Result};
@@ -97,20 +97,13 @@ impl Decoder {
     /// This method returns an error under the same circumstances that
     /// `decompress` does.
     pub fn decompress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        // FIXME: When supporting Rust >= 1.82.0, replace with:
-        // let mut buf =
-        //     Box::new_uninit_slice(max_compress_len(input.len())).into_vec();
         let mut buf = Vec::with_capacity(decompress_len(input)?);
-        // SAFETY: Vec::with_capacity above guarantees that the buffer is allocated up to the
-        // capacity.
-        unsafe { buf.set_len(decompress_len(input)?) }
+        let n = self.decompress_uninit(input, buf.spare_capacity_mut())?;
 
-        let n = self.decompress_uninit(input, &mut buf)?;
-        buf.truncate(n);
-        // SAFETY: The buffer is initialized up to the length returned by decompress_uninit.
-        // decompress_uninit guarantees that the buffer is initialized up to the returned length.
-        let buf =
-            unsafe { mem::transmute::<Vec<MaybeUninit<u8>>, Vec<u8>>(buf) };
+        // SAFETY: compress_uninit guarantees all the data up to `n` is 
+        // initialized
+        unsafe { buf.set_len(n); }
+
         Ok(buf)
     }
 
