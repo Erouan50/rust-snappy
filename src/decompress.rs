@@ -100,9 +100,11 @@ impl Decoder {
         let mut buf = Vec::with_capacity(decompress_len(input)?);
         let n = self.decompress_uninit(input, buf.spare_capacity_mut())?;
 
-        // SAFETY: compress_uninit guarantees all the data up to `n` is 
+        // SAFETY: compress_uninit guarantees all the data up to `n` is
         // initialized
-        unsafe { buf.set_len(n); }
+        unsafe {
+            buf.set_len(n);
+        }
 
         Ok(buf)
     }

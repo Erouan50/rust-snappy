@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
-use std::{fmt, slice};
 use std::ptr;
+use std::{fmt, slice};
 
 use crate::bytes;
 use crate::error::{Error, Result};
@@ -123,8 +123,8 @@ impl Encoder {
     pub fn compress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(max_compress_len(input.len()));
         let n = self.compress_uninit(input, buf.spare_capacity_mut())?;
-        
-        // SAFETY: compress_uninit guarantees all the data up to `n` is 
+
+        // SAFETY: compress_uninit guarantees all the data up to `n` is
         // initialized
         unsafe { buf.set_len(n) };
         Ok(buf)
