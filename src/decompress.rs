@@ -78,7 +78,10 @@ impl Decoder {
         input: &[u8],
         output: &mut [u8],
     ) -> Result<usize> {
-        // SAFETY: `output` is guaranteed to be valid for reads and writes of `output.len()` bytes.
+        // SAFETY: `output` is guaranteed to be valid for reads and writes of
+        // `output.len()` bytes. Also compress_uninit does not write any
+        // uninitialised data into the buffer
+        //   (i.e. via array[0] = MaybeUninit::new())
         let output: &mut [MaybeUninit<u8>] = unsafe {
             slice::from_raw_parts_mut(
                 output.as_mut_ptr() as *mut MaybeUninit<u8>,
