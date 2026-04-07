@@ -91,27 +91,6 @@ impl Decoder {
         self.decompress_uninit(input, output)
     }
 
-    /// Decompresses all bytes in `input` into a freshly allocated `Vec`.
-    ///
-    /// This is just like the `decompress` method, except it allocates a `Vec`
-    /// with the right size for you. (This is intended to be a convenience
-    /// method.)
-    ///
-    /// This method returns an error under the same circumstances that
-    /// `decompress` does.
-    pub fn decompress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        let mut buf = Vec::with_capacity(decompress_len(input)?);
-        let n = self.decompress_uninit(input, buf.spare_capacity_mut())?;
-
-        // SAFETY: compress_uninit guarantees all the data up to `n` is
-        // initialized
-        unsafe {
-            buf.set_len(n);
-        }
-
-        Ok(buf)
-    }
-
     /// Decompresses all bytes in `input` into `output`.
     ///
     /// `input` must be a sequence of bytes returned by a conforming Snappy
@@ -154,6 +133,27 @@ impl Decoder {
         let mut dec = Decompress { src: &input[hdr.len..], s: 0, dst, d: 0 };
         dec.decompress()?;
         Ok(dec.dst.len())
+    }
+
+    /// Decompresses all bytes in `input` into a freshly allocated `Vec`.
+    ///
+    /// This is just like the `decompress` method, except it allocates a `Vec`
+    /// with the right size for you. (This is intended to be a convenience
+    /// method.)
+    ///
+    /// This method returns an error under the same circumstances that
+    /// `decompress` does.
+    pub fn decompress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
+        let mut buf = Vec::with_capacity(decompress_len(input)?);
+        let n = self.decompress_uninit(input, buf.spare_capacity_mut())?;
+
+        // SAFETY: compress_uninit guarantees all the data up to `n` is
+        // initialized
+        unsafe {
+            buf.set_len(n);
+        }
+
+        Ok(buf)
     }
 }
 

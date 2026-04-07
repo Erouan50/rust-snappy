@@ -115,24 +115,6 @@ impl Encoder {
         self.compress_uninit(input, output)
     }
 
-    /// Compresses all bytes in `input` into a freshly allocated `Vec`.
-    ///
-    /// This is just like the `compress` method, except it allocates a `Vec`
-    /// with the right size for you. (This is intended to be a convenience
-    /// method.)
-    ///
-    /// This method returns an error under the same circumstances that
-    /// `compress` does.
-    pub fn compress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
-        let mut buf = Vec::with_capacity(max_compress_len(input.len()));
-        let n = self.compress_uninit(input, buf.spare_capacity_mut())?;
-
-        // SAFETY: compress_uninit guarantees all the data up to `n` is
-        // initialized
-        unsafe { buf.set_len(n) };
-        Ok(buf)
-    }
-
     /// Compresses all bytes in `input` into `output`.
     ///
     /// `input` can be any arbitrary sequence of bytes.
@@ -208,6 +190,24 @@ impl Encoder {
             d = block.d;
         }
         Ok(d)
+    }
+
+    /// Compresses all bytes in `input` into a freshly allocated `Vec`.
+    ///
+    /// This is just like the `compress` method, except it allocates a `Vec`
+    /// with the right size for you. (This is intended to be a convenience
+    /// method.)
+    ///
+    /// This method returns an error under the same circumstances that
+    /// `compress` does.
+    pub fn compress_vec(&mut self, input: &[u8]) -> Result<Vec<u8>> {
+        let mut buf = Vec::with_capacity(max_compress_len(input.len()));
+        let n = self.compress_uninit(input, buf.spare_capacity_mut())?;
+
+        // SAFETY: compress_uninit guarantees all the data up to `n` is
+        // initialized
+        unsafe { buf.set_len(n) };
+        Ok(buf)
     }
 }
 
